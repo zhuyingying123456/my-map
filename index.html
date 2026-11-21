@@ -2,102 +2,543 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的私人都市传说地图</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>我的 OC 创作空间</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; }
-        #map { height: 100vh; width: 100%; }
-        .legend {
-            background: white;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            font-size: 14px;
+        :root { --primary: #6c5ce7; --bg: #f8f9fa; --text: #2d3436; }
+        body { margin: 0; padding: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* 顶部导航栏 */
+        .nav-bar { display: flex; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 1000; }
+        .nav-btn { flex: 1; padding: 15px 5px; text-align: center; font-weight: bold; font-size: 14px; color: #888; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; }
+        .nav-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+        /* 页面容器 */
+        .page { flex: 1; display: none; overflow-y: auto; position: relative; }
+        .page.active { display: block; }
+        
+        /* --- 1. 地图与时空机样式 --- */
+        #map-container { height: 100%; width: 100%; z-index: 1; position: relative; }
+        #map { height: 100%; width: 100%; transition: filter 0.5s ease; }
+        
+        .time-machine {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+            padding: 10px 20px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            z-index: 1000; display: flex; flex-direction: column; align-items: center; width: 80%;
         }
-        .legend h4 { margin: 0 0 5px 0; }
-        .legend-item { display: flex; align-items: center; margin-bottom: 3px; }
-        .legend-color {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
+        .time-display { font-size: 20px; font-weight: 900; color: var(--primary); margin-bottom: 5px; font-family: monospace; letter-spacing: 2px;}
+        .time-display span { font-size: 12px; color: #888; font-weight: normal; }
+        .time-slider { width: 100%; -webkit-appearance: none; height: 6px; border-radius: 3px; background: #dfe6e9; outline: none; }
+        .time-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--primary); cursor: pointer; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
+        
+        .era-past { filter: sepia(0.8) contrast(0.9) brightness(0.9) !important; }
+        .era-future { filter: invert(0.9) hue-rotate(180deg) contrast(1.2) brightness(0.8) !important; }
+
+        /* --- 2. 文字工作区样式 --- */
+        .text-workspace { padding: 15px; padding-bottom: 50px; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; color: #636e72; margin-bottom: 6px; font-weight: bold; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 14px; box-sizing: border-box; font-family: inherit; background: #fcfcfc; }
+        .form-group textarea { height: 80px; resize: vertical; }
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-size: 15px; font-weight: bold; cursor: pointer; }
+        
+        .action-btns { display: flex; gap: 10px; margin-bottom: 15px; }
+        .action-btns button { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .btn-export { background: #ffeaa7; color: #d63031; }
+        .btn-import { background: #55efc4; color: #00b894; }
+
+        .oc-item { border-left: 4px solid var(--primary); margin-bottom: 10px; padding: 10px; background: #f1f2f6; border-radius: 4px; cursor: pointer; }
+        .oc-item h4 { margin: 0 0 5px 0; font-size: 15px; }
+        .oc-item p { margin: 0; font-size: 12px; color: #636e72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* --- 3. 对话剧场样式 --- */
+        #chat-page { display: flex; flex-direction: column; background: #e5ddd5; }
+        .chat-area { flex: 1; padding: 15px; overflow-y: auto; padding-bottom: 20px; }
+        .msg-row { display: flex; margin-bottom: 15px; flex-direction: column; }
+        .msg-left { align-items: flex-start; } .msg-right { align-items: flex-end; }
+        .msg-name { font-size: 12px; color: #666; margin-bottom: 4px; margin-left: 5px; }
+        .msg-bubble { max-width: 80%; padding: 10px 15px; border-radius: 12px; font-size: 15px; line-height: 1.5; position: relative; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg-left .msg-bubble { background: white; border-top-left-radius: 2px; }
+        .msg-right .msg-bubble { background: #95ec69; border-top-right-radius: 2px; color: #000; }
+        .msg-bubble img { max-width: 100%; border-radius: 6px; margin-top: 5px; display: block; }
+        .msg-delete { font-size: 11px; color: #b2bec3; margin-top: 5px; cursor: pointer; }
+        .chat-input-area { background: #f7f7f7; padding: 10px; display: flex; gap: 8px; align-items: center; border-top: 1px solid #ddd; z-index: 10; }
+        .chat-input-area select { width: 80px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px; max-width: 100px; }
+        .chat-input-area input[type="text"] { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 15px; }
+        .chat-input-area button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
+        
+        .img-upload-btn { background: #dfe6e9; color: #636e72; border-radius: 6px; padding: 8px 10px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .img-upload-btn input[type="file"] { display: none; }
+
+        /* --- 弹窗通用样式 --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 2000; display: none; justify-content: center; align-items: flex-end; }
+        .modal-content { background: white; width: 100%; max-height: 90vh; border-radius: 20px 20px 0 0; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
+        .close-btn { float: right; font-size: 20px; font-weight: bold; color: #b2bec3; border: none; background: none; cursor: pointer; }
+        .leaflet-control-attribution { display: none !important; }
+
+        /* 图片预览区 */
+        .img-preview { max-width: 100%; max-height: 150px; border-radius: 8px; margin-top: 10px; display: none; border: 1px solid #ddd; }
+
+        /* 评论区样式 */
+        .comment-item { background: #f1f2f6; padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 14px; position: relative; }
+        .comment-name { font-weight: bold; color: var(--primary); font-size: 13px; display: inline-block; margin-right: 5px; }
+        .comment-time { font-size: 11px; color: #fff; background: #b2bec3; padding: 1px 5px; border-radius: 4px; display: inline-block; vertical-align: middle;}
+        .comment-text { margin-top: 5px; color: #2d3436; }
+        .comment-img { max-width: 100%; border-radius: 6px; margin-top: 8px; display: block; }
+        .comment-del { position: absolute; right: 10px; top: 10px; color: #ff7675; font-size: 12px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div id="map"></div>
+
+    <!-- 顶部导航 -->
+    <div class="nav-bar">
+        <button class="nav-btn active" onclick="switchTab('map-page', this)">🗺️ 时空地图</button>
+        <button class="nav-btn" onclick="switchTab('text-page', this)">📝 设定集</button>
+        <button class="nav-btn" onclick="switchTab('chat-page', this)">💬 对话剧场</button>
+    </div>
+
+    <!-- 页面 1：地图与时空机 -->
+    <div id="map-container" class="page active">
+        <div class="time-machine">
+            <div class="time-display" id="yearDisplay">2024 <span>年</span></div>
+            <input type="range" class="time-slider" id="yearSlider" min="1950" max="2099" value="2024" oninput="changeYear(this.value)">
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <!-- 页面 2：文字空间 -->
+    <div id="text-page" class="page">
+        <div class="text-workspace">
+            <div class="action-btns">
+                <button class="btn-export" onclick="exportData()">📦 导出备份</button>
+                <button class="btn-import" onclick="importData()">📥 导入恢复</button>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0;">创建新 OC</h3>
+                <div class="form-group"><label>角色名字</label><input type="text" id="ocName" placeholder="例如：星野 修"></div>
+                <div class="form-group"><label>身份 / 职业</label><input type="text" id="ocRole" placeholder="例如：流浪法师"></div>
+                <div class="form-group"><label>外貌 / 性格</label><input type="text" id="ocLook" placeholder="例如：银发红瞳"></div>
+                <div class="form-group"><label>背景故事</label><textarea id="ocStory" placeholder="写下他的过去..."></textarea></div>
+                <button class="btn-primary" onclick="saveOC()">保存该角色</button>
+            </div>
+            <h3 style="margin-top:20px;">我的角色库</h3>
+            <div id="ocList"></div>
+            <div class="card" style="margin-top: 20px;">
+                <h3 style="margin-top:0;">📖 灵感与大纲</h3>
+                <textarea id="notesArea" placeholder="随时记录..." style="height:150px; width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #ddd;" oninput="saveNotes()"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页面 3：对话剧场 -->
+    <div id="chat-page" class="page">
+        <div class="chat-area" id="chatArea"></div>
+        <div class="chat-input-area">
+            <select id="chatSpeaker"><option value="旁白">旁白</option></select>
+            <input type="text" id="chatInput" placeholder="输入台词..." onkeyup="handleChatEnter(event)">
+            <label class="img-upload-btn">🖼️<input type="file" accept="image/*" onchange="handleChatImage(this)"></label>
+            <button onclick="sendChat()">发送</button>
+        </div>
+    </div>
+
+    <!-- 弹窗 1：地图添加地点的弹窗 -->
+    <div class="modal-overlay" id="mapModal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeMapForm()">✕</button>
+            <h3 style="margin-top:0;">标记地点 (<span id="currentEraText">2024</span>年)</h3>
+            <div class="form-group"><label>地点名称</label><input type="text" id="locName" placeholder="例如：迷雾森林"></div>
+            <div class="form-group"><label>灵异事件 / 关联故事</label><textarea id="locStory" placeholder="这里发生了什么？"></textarea></div>
+            <div class="form-group">
+                <label>上传相关图片 (选填)</label>
+                <label class="img-upload-btn" style="width:100%; box-sizing:border-box; background:#eef2f5; padding:15px;">📷 点击选择图片<input type="file" accept="image/*" onchange="previewLocImage(this)"></label>
+                <img id="locImgPreview" class="img-preview">
+            </div>
+            <button class="btn-primary" onclick="saveLocation()">添加标记</button>
+        </div>
+    </div>
+
+    <!-- 弹窗 2：地点详情与评论区 -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-content" style="height: 85vh;">
+            <button class="close-btn" onclick="closeDetailModal()">✕</button>
+            <h3 id="detailTitle" style="margin-top:0; color:var(--primary);">地点名称</h3>
+            
+            <div id="detailStory" style="font-size:14px; color:#444; line-height:1.6; background:#f5f5f5; padding:12px; border-radius:8px; margin-bottom:15px; flex-shrink: 0;"></div>
+            <img id="detailImg" style="max-width:100%; border-radius:8px; margin-bottom:15px; display:none; flex-shrink: 0;">
+            
+            <h4 style="margin-bottom:10px; font-size:15px; border-left:3px solid var(--primary); padding-left:8px; flex-shrink: 0;">💬 时代留言板</h4>
+            <div id="commentList" style="flex: 1; overflow-y: auto; margin-bottom:10px;">
+                <!-- 评论列表 -->
+            </div>
+            
+            <!-- 发送评论 -->
+            <div style="background:white; padding-top:10px; border-top:1px solid #eee; flex-shrink: 0;">
+                <div style="display:flex; gap:8px; margin-bottom:8px; justify-content: space-between;">
+                    <select id="commenterName" style="width:100px; padding:8px; border-radius:6px; border:1px solid #ddd; font-size:13px;">
+                        <option value="路人">路人</option>
+                    </select>
+                    <span style="font-size:12px; color:#888; line-height:30px;">当前年代：<b id="commentEraText">2024</b></span>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="commentText" placeholder="留下你的时代印记..." style="flex:1; padding:10px; border-radius:6px; border:1px solid #ddd; font-size:14px;" onkeyup="handleCommentEnter(event)">
+                    <label class="img-upload-btn">🖼️<input type="file" accept="image/*" onchange="handleCommentImage(this)"></label>
+                    <button class="btn-primary" style="width:auto; padding:10px 20px;" onclick="submitComment()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        var map = L.map('map').setView([34.0, 108.0], 4);
+        // ================= 图片压缩工具函数 =================
+        // 将图片压缩为 Base64，防止撑爆手机缓存
+        function compressImage(file, callback) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    var canvas = document.createElement('canvas');
+                    var max_size = 800; // 限制最大宽度/高度为 800px
+                    var width = img.width, height = img.height;
+                    if (width > height && width > max_size) { height *= max_size / width; width = max_size; } 
+                    else if (height > max_size) { width *= max_size / height; height = max_size; }
+                    
+                    canvas.width = width; canvas.height = height;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    // 压缩质量为 0.6
+                    callback(canvas.toDataURL('image/jpeg', 0.6));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+        // --- 全局数据 ---
+        var ocData = JSON.parse(localStorage.getItem('oc_char_data')) || [];
+        var mapData = JSON.parse(localStorage.getItem('oc_map_data')) || [];
+        var chatData = JSON.parse(localStorage.getItem('oc_chat_data')) || [];
+        var currentLocId = null; 
+        var currentYear = 2024;
 
-        // 示例数据，无需修改，直接使用
-        var legends = [
-            {
-                name: "荔湾广场",
-                coords: [23.1167, 113.2500],
-                category: "都市怪谈",
-                story: "广州著名的传说中的地点，关于它的离奇故事一直在网络上流传...",
-                color: "#e74c3c"
-            },
-            {
-                name: "某大学老图书馆",
-                coords: [39.9042, 116.4074],
-                category: "校园怪谈",
-                story: "闭馆后，顶楼总会传来奇怪的翻书声，但那里早已封闭多年...",
-                color: "#3498db"
-            },
-            {
-                name: "废弃的化工厂",
-                coords: [31.2304, 121.4737],
-                category: "凶宅/废墟",
-                story: "有探险者称，在深夜会看到废弃厂房里亮起诡异的灯光...",
-                color: "#f39c12"
-            }
-        ];
+        // 临时存图片
+        var tempLocImg = null;
+        var tempChatImg = null;
+        var tempCommentImg = null;
 
-        legends.forEach(function(item) {
-            var customIcon = L.divIcon({
-                className: 'custom-div-icon',
-                html: '<div style="background-color: ' + item.color + '; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10],
-                popupAnchor: [0, -10]
+        function switchTab(pageId, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            btn.classList.add('active');
+            if(pageId === 'chat-page') scrollToBottom();
+        }
+
+        // ================= 1. 时空机与地图 =================
+        var map = L.map('map', { zoomControl: false }).setView([34.0, 108.0], 4);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        L.tileLayer('https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { maxZoom: 18 }).addTo(map);
+        
+        var markerLayer = L.layerGroup().addTo(map);
+        var tempCoords = null;
+
+        function changeYear(year) {
+            currentYear = year;
+            document.getElementById('yearDisplay').innerHTML = year + ' <span>年</span>';
+            document.getElementById('currentEraText').innerText = year;
+            document.getElementById('commentEraText').innerText = year;
+
+            var mapDiv = document.getElementById('map');
+            mapDiv.classList.remove('era-past', 'era-future');
+            if (year < 1990) mapDiv.classList.add('era-past');
+            else if (year < 2010) mapDiv.style.filter = "sepia(0.4)";
+            else if (year > 2040) mapDiv.classList.add('era-future');
+            else mapDiv.style.filter = "none";
+        }
+
+        function renderMarkers() {
+            markerLayer.clearLayers();
+            mapData.forEach(item => {
+                var icon = L.divIcon({ 
+                    html: `<div style="background:#e74c3c; width:16px; height:16px; border-radius:50%; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`, 
+                    iconSize: [16, 16], iconAnchor: [8, 8] 
+                });
+                var marker = L.marker(item.coords, { icon: icon }).addTo(markerLayer);
+                marker.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    openDetailModal(item.id);
+                });
             });
+        }
 
-            L.marker(item.coords, { icon: customIcon })
-                .addTo(map)
-                .bindPopup(
-                    '<b>' + item.name + '</b><br>' +
-                    '<small>分类：' + item.category + '</small><br>' +
-                    '<p>' + item.story + '</p>'
-                );
+        map.on('click', function(e) {
+            tempCoords = [e.latlng.lat.toFixed(4), e.latlng.lng.toFixed(4)];
+            document.getElementById('mapModal').style.display = 'flex';
         });
+        function closeMapForm() { 
+            document.getElementById('mapModal').style.display = 'none'; 
+            document.getElementById('locImgPreview').style.display = 'none';
+            tempLocImg = null;
+        }
+        
+        // 预览地点图片
+        function previewLocImage(input) {
+            if (input.files && input.files[0]) {
+                compressImage(input.files[0], function(base64) {
+                    tempLocImg = base64;
+                    var img = document.getElementById('locImgPreview');
+                    img.src = base64;
+                    img.style.display = 'block';
+                });
+            }
+        }
 
-        var legend = L.control({ position: 'bottomright' });
-        legend.onAdd = function (map) {
-            var div = L.DomUtil.create('div', 'legend');
-            div.innerHTML = '<h4>传说分类</h4>';
-            var categories = [
-                { name: '都市怪谈', color: '#e74c3c' },
-                { name: '校园怪谈', color: '#3498db' },
-                { name: '凶宅/废墟', color: '#f39c12' }
-            ];
-            categories.forEach(function(cat) {
-                div.innerHTML +=
-                    '<div class="legend-item">' +
-                    '<span class="legend-color" style="background:' + cat.color + '"></span>' +
-                    cat.name +
-                    '</div>';
+        function saveLocation() {
+            var name = document.getElementById('locName').value; 
+            var story = document.getElementById('locStory').value;
+            if(!name || !story) return alert("请填写完整");
+            
+            mapData.push({ 
+                id: Date.now(), 
+                name: name, 
+                story: story, 
+                coords: tempCoords, 
+                image: tempLocImg, // 保存图片
+                comments: [] 
             });
-            return div;
-        };
-        legend.addTo(map);
+            
+            try {
+                localStorage.setItem('oc_map_data', JSON.stringify(mapData)); 
+                renderMarkers(); 
+                closeMapForm();
+                document.getElementById('locName').value = ''; 
+                document.getElementById('locStory').value = '';
+            } catch(e) {
+                alert("手机存储空间已满！请删除一些旧图片，或导出备份后清理。");
+            }
+        }
+
+        // --- 地点详情弹窗逻辑 ---
+        function openDetailModal(id) {
+            currentLocId = id;
+            var loc = mapData.find(i => i.id === id);
+            if(!loc) return;
+            
+            document.getElementById('detailTitle').innerText = loc.name;
+            document.getElementById('detailStory').innerText = loc.story;
+            
+            // 渲染图片
+            var detailImg = document.getElementById('detailImg');
+            if (loc.image) {
+                detailImg.src = loc.image;
+                detailImg.style.display = 'block';
+            } else {
+                detailImg.style.display = 'none';
+            }
+            
+            var select = document.getElementById('commenterName');
+            select.innerHTML = '<option value="路人">路人</option>';
+            ocData.forEach(oc => { select.innerHTML += `<option value="${oc.name}">${oc.name}</option>`; });
+            
+            renderComments(loc);
+            document.getElementById('detailModal').style.display = 'flex';
+        }
+
+        function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; currentLocId = null; }
+
+        function renderComments(loc) {
+            var list = document.getElementById('commentList');
+            list.innerHTML = '';
+            if(!loc.comments || loc.comments.length === 0) {
+                list.innerHTML = '<p style="color:#888; font-size:13px; text-align:center; margin-top:20px;">还没有时代留言，快来抢沙发~</p>';
+                return;
+            }
+            loc.comments.forEach(c => {
+                var div = document.createElement('div');
+                div.className = 'comment-item';
+                
+                var imgHtml = c.image ? `<img src="${c.image}" class="comment-img">` : '';
+                
+                div.innerHTML = `
+                    <div>
+                        <span class="comment-name">${c.name}</span>
+                        <span class="comment-time">${c.year}年</span>
+                    </div>
+                    <div class="comment-text">${c.text}</div>
+                    ${imgHtml}
+                    <div class="comment-del" onclick="deleteComment(${c.id})">删除</div>`;
+                list.appendChild(div);
+            });
+        }
+
+        // 评论图片选择
+        function handleCommentImage(input) {
+            if (input.files && input.files[0]) {
+                compressImage(input.files[0], function(base64) {
+                    tempCommentImg = base64;
+                    alert("✅ 图片已附加，点击发送即可！");
+                });
+            }
+        }
+
+        function submitComment() {
+            if(!currentLocId) return;
+            var name = document.getElementById('commenterName').value;
+            var text = document.getElementById('commentText').value.trim();
+            if(!text && !tempCommentImg) return; // 文字和图片至少有一样
+
+            var loc = mapData.find(i => i.id === currentLocId);
+            if(!loc.comments) loc.comments = [];
+            
+            loc.comments.push({ 
+                id: Date.now(), 
+                name: name, 
+                text: text, 
+                year: currentYear,
+                image: tempCommentImg // 保存图片
+            });
+            
+            try {
+                localStorage.setItem('oc_map_data', JSON.stringify(mapData));
+                document.getElementById('commentText').value = '';
+                tempCommentImg = null; // 清空临时图片
+                renderComments(loc);
+                var list = document.getElementById('commentList');
+                list.scrollTop = list.scrollHeight;
+            } catch(e) {
+                alert("存储空间满了，图片没发出去。");
+            }
+        }
+
+        function handleCommentEnter(e) { if(e.key === 'Enter') submitComment(); }
+
+        function deleteComment(commentId) {
+            if(!confirm("删除这条留言吗？")) return;
+            var loc = mapData.find(i => i.id === currentLocId);
+            loc.comments = loc.comments.filter(c => c.id !== commentId);
+            localStorage.setItem('oc_map_data', JSON.stringify(mapData));
+            renderComments(loc);
+        }
+
+        renderMarkers();
+        changeYear(2024);
+
+        // ================= 2. OC 设定集 =================
+        function renderOC() {
+            var list = document.getElementById('ocList'); list.innerHTML = '';
+            var select = document.getElementById('chatSpeaker'); 
+            select.innerHTML = '<option value="旁白">旁白</option>';
+
+            if(ocData.length === 0) { list.innerHTML = '<p style="color:#888; font-size:14px;">还没有角色。</p>'; }
+            
+            ocData.forEach(oc => {
+                var div = document.createElement('div'); div.className = 'oc-item';
+                div.innerHTML = `<h4>${oc.name} <span style="font-size:12px;color:#888;font-weight:normal;">${oc.role}</span></h4><p>${oc.look}</p>`;
+                div.onclick = function() { alert(`【名字】${oc.name}\n【身份】${oc.role}\n【外貌】${oc.look}\n\n【故事】\n${oc.story}`); };
+                list.appendChild(div);
+                var opt = document.createElement('option'); opt.value = oc.name; opt.innerText = oc.name; select.appendChild(opt);
+            });
+        }
+
+        function saveOC() {
+            var name = document.getElementById('ocName').value; if(!name) return alert("名字不能为空");
+            ocData.push({ id: Date.now(), name: name, role: document.getElementById('ocRole').value, look: document.getElementById('ocLook').value, story: document.getElementById('ocStory').value });
+            localStorage.setItem('oc_char_data', JSON.stringify(ocData)); renderOC();
+            document.getElementById('ocName').value = ''; document.getElementById('ocRole').value = ''; document.getElementById('ocLook').value = ''; document.getElementById('ocStory').value = '';
+        }
+        renderOC();
+
+        // ================= 3. 灵感大纲 =================
+        var notesArea = document.getElementById('notesArea');
+        notesArea.value = localStorage.getItem('oc_notes') || '';
+        function saveNotes() { localStorage.setItem('oc_notes', notesArea.value); }
+
+        // ================= 4. 对话剧场 =================
+        var chatArea = document.getElementById('chatArea');
+        var lastSpeaker = '';
+
+        function renderChat() {
+            chatArea.innerHTML = '';
+            chatData.forEach((msg, index) => {
+                var isRight = (msg.speaker !== '旁白' && msg.speaker === lastSpeaker); 
+                var row = document.createElement('div');
+                row.className = 'msg-row ' + (isRight ? 'msg-right' : 'msg-left');
+                
+                var imgHtml = msg.image ? `<img src="${msg.image}">` : '';
+                
+                var html = `<div class="msg-name">${msg.speaker}</div>
+                            <div class="msg-bubble">
+                                ${msg.text ? msg.text : ''}
+                                ${imgHtml}
+                            </div>`;
+                            
+                if(msg.speaker === '旁白') {
+                    row.className = 'msg-row'; row.style.alignItems = 'center';
+                    html = `<div style="font-size:12px; color:#888; background:rgba(0,0,0,0.1); padding:5px 15px; border-radius:20px; text-align:center; max-width:80%;">${msg.text}</div>`;
+                } else {
+                    html += `<div class="msg-delete" onclick="deleteChat(${index})">删除</div>`;
+                }
+                row.innerHTML = html;
+                chatArea.appendChild(row);
+                lastSpeaker = msg.speaker;
+            });
+            scrollToBottom();
+        }
+
+        function handleChatImage(input) {
+            if (input.files && input.files[0]) {
+                compressImage(input.files[0], function(base64) {
+                    tempChatImg = base64;
+                    alert("✅ 图片已附加，点击发送按钮即可发送！");
+                });
+            }
+        }
+
+        function sendChat() {
+            var speaker = document.getElementById('chatSpeaker').value;
+            var input = document.getElementById('chatInput'); var text = input.value.trim();
+            if(!text && !tempChatImg) return;
+            
+            chatData.push({ 
+                speaker: speaker, 
+                text: text, 
+                image: tempChatImg // 保存图片
+            });
+            
+            try {
+                localStorage.setItem('oc_chat_data', JSON.stringify(chatData));
+                input.value = ''; 
+                tempChatImg = null; // 清空临时
+                renderChat();
+            } catch(e) {
+                alert("存储空间满了，发图失败。");
+            }
+        }
+        function handleChatEnter(e) { if(e.key === 'Enter') sendChat(); }
+        function deleteChat(index) { if(confirm("删除这句台词？")) { chatData.splice(index, 1); localStorage.setItem('oc_chat_data', JSON.stringify(chatData)); renderChat(); } }
+        function scrollToBottom() { chatArea.scrollTop = chatArea.scrollHeight; }
+        renderChat();
+
+        // ================= 5. 导入/导出 =================
+        function exportData() {
+            var allData = { map: mapData, chars: ocData, notes: localStorage.getItem('oc_notes') || '', chat: chatData };
+            prompt("⬇️ 请复制文字保存在备忘录（包含图片，可能很长）：", JSON.stringify(allData));
+        }
+        function importData() {
+            var input = prompt("📥 粘贴之前导出的文字：");
+            if(!input) return;
+            try {
+                var data = JSON.parse(input);
+                if(data.map) { mapData = data.map; localStorage.setItem('oc_map_data', JSON.stringify(mapData)); renderMarkers(); }
+                if(data.chars) { ocData = data.chars; localStorage.setItem('oc_char_data', JSON.stringify(ocData)); renderOC(); }
+                if(data.notes !== undefined) { localStorage.setItem('oc_notes', data.notes); document.getElementById('notesArea').value = data.notes; }
+                if(data.chat) { chatData = data.chat; localStorage.setItem('oc_chat_data', JSON.stringify(chatData)); renderChat(); }
+                alert("✅ 数据恢复成功！");
+            } catch(e) { alert("❌ 格式不对，导入失败。"); }
+        }
     </script>
 </body>
 </html>
