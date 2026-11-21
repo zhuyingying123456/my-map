@@ -3,248 +3,287 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>都市传说地图</title>
-    <!-- 引入 Leaflet 地图样式 -->
+    <title>OC 世界观时空终端</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* 彻底修复半屏问题：强制占满全屏 */
-        html, body {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; font-family: -apple-system, sans-serif;
+        :root { 
+            --bg-dark: #0f111a; 
+            --panel: #1a1d2d; 
+            --primary: #00d2ff; 
+            --accent: #ff3366; 
+            --text: #e0e6ed; 
+            --text-muted: #8395a7; 
         }
-        #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
-
-        /* 顶部悬浮年份条 */
-        .top-bar {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            background: rgba(255,255,255,0.95); padding: 10px 20px; border-radius: 30px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1000; width: 80%; text-align: center;
-        }
-        .year-text { font-size: 18px; font-weight: bold; color: #6c5ce7; font-family: monospace; }
-        input[type=range] { width: 100%; margin-top: 5px; }
-
-        /* 弹窗样式优化 */
-        .modal {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7);
-            z-index: 2000; display: none; justify-content: center; align-items: flex-end;
-        }
-        .modal-content {
-            background: white; width: 100%; max-height: 85vh; border-radius: 20px 20px 0 0;
-            padding: 20px; box-sizing: border-box; display: flex; flex-direction: column;
-        }
-        .close-btn { position: absolute; right: 20px; top: 15px; font-size: 24px; color: #999; background: none; border: none; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 0; font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
+        /* 顶部导航 */
+        .nav-bar { display: flex; background: var(--panel); border-bottom: 1px solid #333; z-index: 1000; }
+        .nav-btn { flex: 1; padding: 15px 5px; text-align: center; font-size: 13px; font-weight: bold; color: var(--text-muted); border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.3s; }
+        .nav-btn.active { color: var(--primary); border-bottom-color: var(--primary); text-shadow: 0 0 10px rgba(0,210,255,0.5); }
+
+        /* 页面容器 */
+        .page { flex: 1; display: none; overflow-y: auto; position: relative; height: 100%; }
+        .page.active { display: flex; flex-direction: column; }
+
+        /* --- 1. 地图与时序系统 --- */
+        #map-container { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; background: #111; }
+        /* 地图暗黑滤镜 */
+        .leaflet-layer { filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.2); }
+
+        .time-controller {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            background: rgba(26, 29, 45, 0.9); border: 1px solid var(--primary); border-radius: 8px;
+            padding: 10px 15px; text-align: center; width: 85%; backdrop-filter: blur(10px); box-shadow: 0 0 15px rgba(0,210,255,0.2);
+        }
+        .time-display { font-size: 18px; font-weight: bold; color: var(--primary); letter-spacing: 2px; margin-bottom: 8px; font-family: monospace;}
+        .time-controller input[type="date"] {
+            background: var(--bg-dark); color: var(--text); border: 1px solid #333; padding: 8px; border-radius: 4px; width: 100%; font-size: 16px; outline: none;
+        }
+
+        /* --- 2. 角色档案 --- */
+        .card-container { padding: 15px; }
+        .oc-card { background: var(--panel); border: 1px solid #333; border-radius: 10px; padding: 15px; margin-bottom: 15px; position: relative; border-left: 4px solid var(--primary); }
+        .oc-card h3 { margin: 0 0 10px 0; font-size: 18px; }
+        .oc-tag { font-size: 11px; background: #333; padding: 2px 6px; border-radius: 4px; margin-right: 5px; color: var(--primary); }
+        
+        /* --- 3. 剧本对话框 (Galgame风格) --- */
+        #drama-page { background: #000; position: relative; }
+        .drama-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle, #1a1d2d 0%, #000 100%); z-index: 1; }
+        .drama-char-left, .drama-char-right { position: absolute; bottom: 150px; width: 40%; height: 60%; background: rgba(255,255,255,0.05); border: 1px dashed #333; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #555; z-index: 2; }
+        .drama-char-left { left: 5%; } .drama-char-right { right: 5%; }
+        
+        .drama-box { position: absolute; bottom: 0; left: 0; right: 0; height: 140px; background: rgba(15, 17, 26, 0.95); border-top: 2px solid var(--primary); padding: 15px; z-index: 3; display: flex; flex-direction: column; }
+        .speaker-name { color: var(--accent); font-weight: bold; font-size: 16px; margin-bottom: 5px; }
+        .dialogue-text { font-size: 15px; line-height: 1.5; flex: 1; overflow-y: auto; }
+        .drama-controls { display: flex; gap: 10px; margin-top: 10px; }
+        .drama-controls input { flex: 1; background: transparent; border: none; border-bottom: 1px solid #555; color: white; padding: 5px; outline: none; font-size: 14px; }
+        .drama-controls button { background: var(--primary); color: #000; border: none; padding: 5px 15px; font-weight: bold; border-radius: 4px; }
+
+        /* 弹窗覆盖层 */
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 3000; display: none; justify-content: center; align-items: center; }
+        .modal-box { background: var(--panel); width: 90%; max-height: 85vh; border-radius: 12px; padding: 20px; overflow-y: auto; border: 1px solid var(--primary); }
         .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #333; }
-        .form-group input, .form-group textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px;}
-        .form-group textarea { height: 100px; resize: none; }
+        .form-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; background: var(--bg-dark); border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; outline: none; }
+        .btn { background: var(--primary); color: #000; font-weight: bold; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; }
         
-        .btn { background: #6c5ce7; color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-size: 16px; font-weight: bold; }
-        
-        /* 评论区样式 */
-        .story-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; line-height: 1.6; max-height: 200px; overflow-y: auto;}
-        .comment-list { flex: 1; overflow-y: auto; margin-bottom: 15px; }
-        .comment-item { border-bottom: 1px solid #eee; padding: 10px 0; font-size: 14px; }
-        .comment-user { font-weight: bold; color: #6c5ce7; font-size: 13px; }
-        .comment-year { font-size: 11px; background: #dfe6e9; padding: 2px 5px; border-radius: 4px; margin-left: 5px; color: #555; }
-        
-        /* 图片样式 */
-        .img-preview { max-width: 100%; max-height: 100px; display: none; margin-top: 10px; border-radius: 5px;}
-        .comment-img { max-width: 100%; border-radius: 5px; margin-top: 5px; }
+        /* 地图标记点 */
+        .marker-pulse { width: 14px; height: 14px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 0 rgba(255,51,102,0.7); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255,51,102,0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255,51,102,0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255,51,102,0); } }
     </style>
 </head>
 <body>
 
-    <!-- 顶部年份条 -->
-    <div class="top-bar">
-        <div class="year-text" id="yearDisplay">2024 年</div>
-        <input type="range" id="yearSlider" min="1950" max="2099" value="2024" oninput="changeYear(this.value)">
+    <!-- 顶部导航 -->
+    <div class="nav-bar">
+        <div class="nav-btn active" onclick="switchTab('map-page', this)">时空沙盘</div>
+        <div class="nav-btn" onclick="switchTab('char-page', this)">人员档案</div>
+        <div class="nav-btn" onclick="switchTab('drama-page', this)">剧本推演</div>
     </div>
 
-    <!-- 地图容器 -->
-    <div id="map"></div>
-
-    <!-- 弹窗 1：写新故事 -->
-    <div class="modal" id="addModal">
-        <div class="modal-content">
-            <button class="close-btn" onclick="closeAddModal()">✕</button>
-            <h3 style="margin-top:0;">标记地点</h3>
-            <div class="form-group"><label>地点名称</label><input type="text" id="locName" placeholder="例如：荔湾广场"></div>
-            <div class="form-group"><label>故事/灵异事件</label><textarea id="locStory" placeholder="这里发生了什么？"></textarea></div>
-            <div class="form-group">
-                <label>附加图片 (选填)</label>
-                <input type="file" accept="image/*" onchange="previewImg(this)">
-                <img id="locImgPreview" class="img-preview">
+    <!-- 页面 1：地图与时间 -->
+    <div id="map-page" class="page active">
+        <div id="map-container">
+            <div class="time-controller">
+                <div class="time-display" id="timeDisplay">2024-01-01</div>
+                <input type="date" id="datePicker" value="2024-01-01" onchange="changeDate(this.value)">
             </div>
-            <button class="btn" onclick="saveLocation()">保存标记</button>
+            <div id="map"></div>
         </div>
     </div>
 
-    <!-- 弹窗 2：地点详情与评论 -->
-    <div class="modal" id="detailModal">
-        <div class="modal-content" style="height: 80vh;">
-            <button class="close-btn" onclick="closeDetailModal()">✕</button>
-            <h3 id="detailTitle" style="margin-top:0; color:#6c5ce7;">地点名称</h3>
-            <div class="story-box" id="detailStory"></div>
-            <img id="detailImg" style="max-width:100%; border-radius:8px; margin-bottom:15px; display:none;">
-            
-            <h4 style="margin:0 0 10px 0; border-left:4px solid #6c5ce7; padding-left:8px;">💬 时代留言板</h4>
-            <div class="comment-list" id="commentList"></div>
-            
-            <div style="display:flex; gap:5px;">
-                <input type="text" id="commenterName" value="路人" style="width:60px; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px;">
-                <input type="text" id="commentText" placeholder="留言..." style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px;">
-                <button class="btn" style="width:auto; padding:0 15px;" onclick="submitComment()">发送</button>
+    <!-- 页面 2：角色设定 -->
+    <div id="char-page" class="page" style="overflow-y: auto;">
+        <div class="card-container">
+            <button class="btn" style="margin-bottom: 15px;" onclick="openCharModal()">+ 建立新档案</button>
+            <div id="charList"></div>
+        </div>
+    </div>
+
+    <!-- 页面 3：剧本推演 -->
+    <div id="drama-page" class="page">
+        <div class="drama-bg"></div>
+        <div class="drama-char-left">左侧角色位置 (无立绘)</div>
+        <div class="drama-char-right">右侧角色位置 (无立绘)</div>
+        <div class="drama-box">
+            <div class="speaker-name" id="dramaSpeaker">旁白</div>
+            <div class="dialogue-text" id="dramaText">故事从这里开始...</div>
+            <div class="drama-controls">
+                <select id="dramaCharSelect" style="background:#111; color:white; border:1px solid #444;">
+                    <option value="旁白">旁白</option>
+                </select>
+                <input type="text" id="dramaInput" placeholder="输入台词或动作...">
+                <button onclick="sendDrama()">推演</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：新建地图事件 -->
+    <div class="modal" id="eventModal">
+        <div class="modal-box">
+            <h3 style="margin-top:0; color:var(--accent);">记录时空事件</h3>
+            <div class="form-group"><label>发生地点名称</label><input type="text" id="evName" placeholder="如：废弃钟楼"></div>
+            <div class="form-group"><label>发生时间 (用于时间过滤)</label><input type="date" id="evDate" value="2024-01-01"></div>
+            <div class="form-group"><label>事件详情</label><textarea id="evStory" style="height:80px;"></textarea></div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn" style="background:#444; color:white;" onclick="closeModal('eventModal')">取消</button>
+                <button class="btn" onclick="saveEvent()">保存事件</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：新建角色 -->
+    <div class="modal" id="charModal">
+        <div class="modal-box">
+            <h3 style="margin-top:0; color:var(--primary);">建立人员档案</h3>
+            <div class="form-group"><label>姓名</label><input type="text" id="ocName"></div>
+            <div class="form-group"><label>阵营/势力</label><input type="text" id="ocFaction" placeholder="如：守夜人组织"></div>
+            <div class="form-group"><label>核心设定 / 秘密</label><textarea id="ocStory" style="height:80px;"></textarea></div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn" style="background:#444; color:white;" onclick="closeModal('charModal')">取消</button>
+                <button class="btn" onclick="saveChar()">存入档案</button>
             </div>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // --- 数据存储 ---
-        var mapData = JSON.parse(localStorage.getItem('simple_map_data')) || [];
-        var currentYear = 2024;
+        // --- 核心数据 ---
+        var state = JSON.parse(localStorage.getItem('oc_world_state')) || { events: [], chars: [], drama: [] };
+        var currentDate = '2024-01-01';
         var tempCoords = null;
-        var tempImgBase64 = null;
-        var currentLocId = null;
 
-        // --- 初始化地图 (修复全屏问题) ---
+        function saveState() { localStorage.setItem('oc_world_state', JSON.stringify(state)); }
+
+        // --- UI 切换 ---
+        function switchTab(pageId, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            btn.classList.add('active');
+            if(pageId === 'map-page') setTimeout(() => map.invalidateSize(), 200);
+        }
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        // ================= 1. 时空沙盘系统 =================
         var map = L.map('map', { zoomControl: false }).setView([34.0, 108.0], 4);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
-        
-        // 高德底图
         L.tileLayer('https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { maxZoom: 18 }).addTo(map);
-
         var markerLayer = L.layerGroup().addTo(map);
 
-        // --- 年份滤镜 ---
-        function changeYear(year) {
-            currentYear = year;
-            document.getElementById('yearDisplay').innerText = year + ' 年';
-            var mapDiv = document.getElementById('map');
-            if (year < 1990) mapDiv.style.filter = "sepia(0.8) contrast(0.9)";
-            else if (year < 2010) mapDiv.style.filter = "sepia(0.4)";
-            else if (year > 2040) mapDiv.style.filter = "invert(0.9) hue-rotate(180deg)";
-            else mapDiv.style.filter = "none";
+        // 更换日期（核心：地图上的点会根据时间出现和消失）
+        function changeDate(dateStr) {
+            currentDate = dateStr;
+            document.getElementById('timeDisplay').innerText = dateStr;
+            renderEvents();
         }
 
-        // --- 图片压缩 ---
-        function previewImg(input) {
-            if (input.files && input.files[0]) {
-                var reader = new FileReader();
-                reader.onload = function(e) {
-                    var img = new Image();
-                    img.onload = function() {
-                        var canvas = document.createElement('canvas');
-                        var max_size = 800;
-                        var w = img.width, h = img.height;
-                        if (w > h && w > max_size) { h *= max_size / w; w = max_size; } 
-                        else if (h > max_size) { w *= max_size / h; h = max_size; }
-                        canvas.width = w; canvas.height = h;
-                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                        tempImgBase64 = canvas.toDataURL('image/jpeg', 0.6);
-                        var pre = document.getElementById('locImgPreview');
-                        pre.src = tempImgBase64; pre.style.display = 'block';
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(input.files[0]);
+        map.on('click', function(e) {
+            tempCoords = [e.latlng.lat.toFixed(4), e.latlng.lng.toFixed(4)];
+            document.getElementById('evDate').value = currentDate; // 默认选当前时间
+            openModal('eventModal');
+        });
+
+        function saveEvent() {
+            var name = document.getElementById('evName').value;
+            var date = document.getElementById('evDate').value;
+            var story = document.getElementById('evStory').value;
+            if(!name || !date || !story) return alert("请填写完整");
+
+            state.events.push({ id: Date.now(), name: name, date: date, story: story, coords: tempCoords });
+            saveState();
+            renderEvents();
+            closeModal('eventModal');
+            // 清空表单
+            document.getElementById('evName').value = ''; document.getElementById('evStory').value = '';
+        }
+
+        function renderEvents() {
+            markerLayer.clearLayers();
+            // 过滤：只显示发生时间 <= 当前时间的事件
+            var visibleEvents = state.events.filter(ev => ev.date <= currentDate);
+            
+            visibleEvents.forEach(ev => {
+                var icon = L.divIcon({ html: `<div class="marker-pulse"></div>`, className: '', iconSize: [14,14], iconAnchor: [7,7] });
+                L.marker(ev.coords, { icon: icon }).addTo(markerLayer)
+                 .bindPopup(`<div style="font-family:sans-serif;">
+                                <h4 style="margin:0 0 5px 0; color:#ff3366;">${ev.name}</h4>
+                                <div style="font-size:11px; color:#888; margin-bottom:5px;">发生时间：${ev.date}</div>
+                                <div style="font-size:13px;">${ev.story}</div>
+                             </div>`);
+            });
+        }
+
+        // ================= 2. 角色档案 =================
+        function openCharModal() { openModal('charModal'); }
+        function saveChar() {
+            var name = document.getElementById('ocName').value;
+            var faction = document.getElementById('ocFaction').value;
+            var story = document.getElementById('ocStory').value;
+            if(!name) return alert("名字不能为空");
+
+            state.chars.push({ id: Date.now(), name: name, faction: faction, story: story });
+            saveState();
+            renderChars();
+            closeModal('charModal');
+            document.getElementById('ocName').value = ''; document.getElementById('ocFaction').value = ''; document.getElementById('ocStory').value = '';
+        }
+
+        function renderChars() {
+            var list = document.getElementById('charList');
+            var select = document.getElementById('dramaCharSelect');
+            list.innerHTML = ''; 
+            select.innerHTML = '<option value="旁白">旁白</option>';
+
+            state.chars.forEach(c => {
+                list.innerHTML += `
+                <div class="oc-card">
+                    <h3>${c.name} <span style="font-size:12px; color:#888;">[${c.faction || '无阵营'}]</span></h3>
+                    <div style="font-size:14px; color:#aaa; line-height:1.5;">${c.story}</div>
+                </div>`;
+                select.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+            });
+        }
+
+        // ================= 3. 剧本推演 (Galgame风格) =================
+        function sendDrama() {
+            var speaker = document.getElementById('dramaCharSelect').value;
+            var text = document.getElementById('dramaInput').value.trim();
+            if(!text) return;
+
+            state.drama.push({ speaker: speaker, text: text });
+            saveState();
+            document.getElementById('dramaInput').value = '';
+            renderDrama();
+        }
+
+        function renderDrama() {
+            var speakerEl = document.getElementById('dramaSpeaker');
+            var textEl = document.getElementById('dramaText');
+            
+            if(state.drama.length === 0) return;
+            
+            // 仅展示最后一句，保持简洁，像真正的游戏对话框
+            var lastMsg = state.drama[state.drama.length - 1];
+            
+            if(lastMsg.speaker === '旁白') {
+                speakerEl.innerText = '【 旁白 / 系统 】';
+                speakerEl.style.color = '#8395a7';
+                textEl.innerHTML = `<span style="font-style:italic; color:#aaa;">${lastMsg.text}</span>`;
+            } else {
+                speakerEl.innerText = lastMsg.speaker;
+                speakerEl.style.color = '#00d2ff';
+                textEl.innerText = lastMsg.text;
             }
         }
 
-        // --- 地图点击打点 ---
-        map.on('click', function(e) {
-            tempCoords = [e.latlng.lat.toFixed(4), e.latlng.lng.toFixed(4)];
-            document.getElementById('addModal').style.display = 'flex';
-        });
-
-        function closeAddModal() {
-            document.getElementById('addModal').style.display = 'none';
-            document.getElementById('locName').value = '';
-            document.getElementById('locStory').value = '';
-            document.getElementById('locImgPreview').style.display = 'none';
-            tempImgBase64 = null;
-        }
-
-        function saveLocation() {
-            var name = document.getElementById('locName').value;
-            var story = document.getElementById('locStory').value;
-            if(!name || !story) return alert("名字和故事不能为空！");
-
-            mapData.push({
-                id: Date.now(),
-                name: name,
-                story: story,
-                coords: tempCoords,
-                image: tempImgBase64,
-                comments: []
-            });
-            localStorage.setItem('simple_map_data', JSON.stringify(mapData));
-            renderMarkers();
-            closeAddModal();
-        }
-
-        // --- 渲染地图标记 ---
-        function renderMarkers() {
-            markerLayer.clearLayers();
-            mapData.forEach(item => {
-                var icon = L.divIcon({ 
-                    html: `<div style="background:#e74c3c; width:18px; height:18px; border-radius:50%; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`, 
-                    iconSize: [18, 18], iconAnchor: [9, 9] 
-                });
-                L.marker(item.coords, { icon: icon }).addTo(markerLayer).on('click', function() {
-                    openDetail(item.id);
-                });
-            });
-        }
-
-        // --- 查看详情与评论 ---
-        function openDetail(id) {
-            currentLocId = id;
-            var loc = mapData.find(i => i.id === id);
-            document.getElementById('detailTitle').innerText = loc.name;
-            document.getElementById('detailStory').innerText = loc.story;
-            
-            var img = document.getElementById('detailImg');
-            if(loc.image) { img.src = loc.image; img.style.display = 'block'; }
-            else { img.style.display = 'none'; }
-
-            renderComments(loc);
-            document.getElementById('detailModal').style.display = 'flex';
-        }
-
-        function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
-
-        function renderComments(loc) {
-            var list = document.getElementById('commentList');
-            list.innerHTML = loc.comments.length === 0 ? '<p style="color:#aaa;text-align:center;">暂无评论</p>' : '';
-            loc.comments.forEach(c => {
-                list.innerHTML += `
-                <div class="comment-item">
-                    <span class="comment-user">${c.name}</span>
-                    <span class="comment-year">${c.year}年</span>
-                    <div style="margin-top:5px; color:#333;">${c.text}</div>
-                </div>`;
-            });
-        }
-
-        function submitComment() {
-            if(!currentLocId) return;
-            var name = document.getElementById('commenterName').value || '路人';
-            var text = document.getElementById('commentText').value;
-            if(!text) return;
-
-            var loc = mapData.find(i => i.id === currentLocId);
-            loc.comments.push({ name: name, text: text, year: currentYear });
-            localStorage.setItem('simple_map_data', JSON.stringify(mapData));
-            
-            document.getElementById('commentText').value = '';
-            renderComments(loc);
-        }
-
-        // 初始化
-        changeYear(2024);
-        renderMarkers();
+        // --- 初始化 ---
+        changeDate(currentDate);
+        renderChars();
+        renderDrama();
     </script>
 </body>
 </html>
